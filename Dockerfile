@@ -4,7 +4,9 @@ WORKDIR /app
 
 COPY pyproject.toml poetry.lock /app/
 
-RUN pip install poetry && poetry install --no-dev
+RUN apt-get update && apt-get install -y libffi-dev && \
+    pip install poetry && \
+    poetry install --no-dev
 
 COPY . /app
 
