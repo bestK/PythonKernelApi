@@ -19,7 +19,4 @@ RUN poetry install -vvv --no-root || poetry install -vvv --no-root || poetry ins
 # 复制其余应用程序文件
 COPY . .
 
-
-ENV API_PORT=443
-
 CMD ["poetry", "run", "python", "kernel_program/main.py"]
