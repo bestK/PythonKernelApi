@@ -19,7 +19,7 @@ from flask_cors import CORS  # Import the CORS library
 load_dotenv('.env')
 
 
-APP_PORT = int(os.environ.get("API_PORT", 5010))
+APP_PORT = int(os.environ.get("API_PORT", 443))
 
 # Get global logger
 logger = config.get_logger()
@@ -142,7 +142,7 @@ def handle_stop():
     return jsonify({"result": "bye~"})
 
 
-async def start():
+async def main():
     start_kernel_manager()
 
     # Run Flask app in a separate thread
@@ -158,4 +158,5 @@ def run_flask_app():
 
 
 if __name__ == "__main__":
-    asyncio.run(start())
+    asyncio.run(main())
+
