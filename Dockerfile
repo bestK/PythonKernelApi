@@ -12,8 +12,9 @@ RUN pip install --upgrade pip
 
 # 使用 poetry 安装项目依赖
 COPY pyproject.toml poetry.lock ./
-RUN pip install poetry
-RUN poetry install --no-dev
+RUN pip install "poetry>=1.3.0,<1.4.0"
+RUN poetry config installer.max-workers 10
+RUN poetry install -vvv --no-root || poetry install -vvv --no-root || poetry install -vvv --no-root
 
 # 复制其余应用程序文件
 COPY . .
