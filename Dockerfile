@@ -1,13 +1,13 @@
-ARG PORT=443
-
-FROM ubuntu:latest
+FROM python:3.12.0b4-alpine
 
 WORKDIR /app
 
-COPY . .
+COPY pyproject.toml poetry.lock /app/
 
-RUN cd /app && \
-    curl -sSL https://install.python-poetry.org | python3 - && \
-    poetry install
+RUN pip install poetry && poetry install --no-dev
 
-CMD poetry run python3 .\main.py --host 0.0.0.0 --port $PORT
+COPY . /app
+
+ENV API_PORT=443
+
+CMD ["poetry", "run", "python", "main.py"]
