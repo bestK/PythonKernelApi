@@ -5,12 +5,12 @@ build-docker:
 
 run-docker:
 	docker rm -f python-kernel || true
-	docker run -p 3333:3333 --name  python-kernel python-kernel
+	docker run -p 443:5010 --name  python-kernel python-kernel
 
 
 remove-docker:
 	docker rm -f python-kernel || true
-	
+
 dev:
 	poetry run dev
 

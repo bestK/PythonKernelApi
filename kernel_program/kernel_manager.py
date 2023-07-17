@@ -1,3 +1,5 @@
+import utils
+import config
 import atexit
 import json
 import os
@@ -16,9 +18,6 @@ from jupyter_client import BlockingKernelClient
 
 load_dotenv('.env')
 
-
-import kernel_program.config as config
-import kernel_program.utils as utils
 
 # Set up globals
 messaging = None
@@ -70,7 +69,8 @@ def cleanup_spawned_processes():
 def start_snakemq(kc):
     global messaging
 
-    messaging, link = utils.init_snakemq(config.IDENT_KERNEL_MANAGER, "connect")
+    messaging, link = utils.init_snakemq(
+        config.IDENT_KERNEL_MANAGER, "connect")
 
     def on_recv(conn, ident, message):
         if ident == config.IDENT_MAIN:
@@ -87,7 +87,8 @@ def start_snakemq(kc):
     start_flusher(kc)
 
     # Send alive
-    utils.send_json(messaging, {"type": "status", "value": "ready"}, config.IDENT_MAIN)
+    utils.send_json(messaging, {"type": "status",
+                    "value": "ready"}, config.IDENT_MAIN)
     logger.info("Python kernel ready to receive messages!")
 
     logger.info("Starting snakemq loop")
@@ -144,11 +145,13 @@ def flush_kernel_msgs(kc, tries=1, timeout=0.2):
                         send_message(msg["content"]["data"]["text/plain"])
 
                 elif msg["msg_type"] == "stream":
-                    logger.debug("Received stream output %s" % msg["content"]["text"])
+                    logger.debug("Received stream output %s" %
+                                 msg["content"]["text"])
                     send_message(msg["content"]["text"])
                 elif msg["msg_type"] == "error":
                     send_message(
-                        utils.escape_ansi("\n".join(msg["content"]["traceback"])),
+                        utils.escape_ansi(
+                            "\n".join(msg["content"]["traceback"])),
                         "message_raw",
                     )
             except queue.Empty:
@@ -168,7 +171,8 @@ def flush_kernel_msgs(kc, tries=1, timeout=0.2):
 
 
 def start_kernel():
-    kernel_connection_file = os.path.join(os.getcwd(), "kernel_connection_file.json")
+    kernel_connection_file = os.path.join(
+        os.getcwd(), "kernel_connection_file.json")
 
     if os.path.isfile(kernel_connection_file):
         os.remove(kernel_connection_file)

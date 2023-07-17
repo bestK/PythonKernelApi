@@ -1,3 +1,6 @@
+import utils
+import kernel_manager
+import config
 import asyncio
 import json
 import logging
@@ -15,9 +18,6 @@ from flask_cors import CORS  # Import the CORS library
 
 load_dotenv('.env')
 
-import kernel_program.config as config
-import kernel_program.kernel_manager as kernel_manager
-import kernel_program.utils as utils
 
 APP_PORT = int(os.environ.get("API_PORT", 5010))
 
@@ -57,7 +57,8 @@ def start_kernel_manager():
     # Write PID as <pid>.pid to config.KERNEL_PID_DIR
     os.makedirs(config.KERNEL_PID_DIR, exist_ok=True)
     with open(
-        os.path.join(config.KERNEL_PID_DIR, "%d.pid" % kernel_manager_process.pid), "w"
+        os.path.join(config.KERNEL_PID_DIR, "%d.pid" %
+                     kernel_manager_process.pid), "w"
     ) as p:
         p.write("kernel_manager")
 
@@ -77,13 +78,15 @@ async def start_snakemq():
         if message["type"] == "status":
             if message["value"] == "ready":
                 logger.debug("Kernel is ready.")
-                result_queue.put({"value": "Kernel is ready.", "type": "message"})
+                result_queue.put(
+                    {"value": "Kernel is ready.", "type": "message"})
 
         elif message["type"] in ["message", "message_raw", "image/png", "image/jpeg"]:
             # TODO: 1:1 kernel <> channel mapping
             logger.debug("%s of type %s" % (message["value"], message["type"]))
 
-            result_queue.put({"value": message["value"], "type": message["type"]})
+            result_queue.put(
+                {"value": message["value"], "type": message["type"]})
 
     messaging.on_message_recv.add(on_recv)
     logger.info("Starting snakemq loop")
@@ -132,10 +135,12 @@ def handle_restart():
 
     return jsonify({"result": "success"})
 
+
 @app.route("/shutdown", methods=["POST"])
 def handle_stop():
     cleanup_kernel_program()
     return jsonify({"result": "bye~"})
+
 
 async def start():
     start_kernel_manager()
@@ -154,4 +159,3 @@ def run_flask_app():
 
 if __name__ == "__main__":
     asyncio.run(start())
-

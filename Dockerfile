@@ -22,4 +22,4 @@ COPY . .
 
 ENV API_PORT=443
 
-CMD ["poetry", "run", "python", "main.py"]
+CMD ["poetry", "run", "python", "kernel_program/main.py"]

@@ -7,8 +7,7 @@ import snakemq.messaging
 import snakemq.packeter
 
 
-import kernel_program.config as config
- 
+import config
 
 
 def escape_ansi(line):
@@ -17,7 +16,8 @@ def escape_ansi(line):
 
 
 def send_json(messaging, message, identity):
-    message = snakemq.message.Message(json.dumps(message).encode("utf-8"), ttl=600)
+    message = snakemq.message.Message(
+        json.dumps(message).encode("utf-8"), ttl=600)
     messaging.send_message(identity, message)
 
 
