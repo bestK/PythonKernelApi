@@ -15,9 +15,9 @@ from flask_cors import CORS  # Import the CORS library
 
 load_dotenv('.env')
 
-import config
-import kernel_manager
-import utils
+import kernel_program.config as config
+import kernel_program.kernel_manager as kernel_manager
+import kernel_program.utils as utils
 
 APP_PORT = int(os.environ.get("API_PORT", 5010))
 
@@ -137,7 +137,7 @@ def handle_stop():
     cleanup_kernel_program()
     return jsonify({"result": "bye~"})
 
-async def main():
+async def start():
     start_kernel_manager()
 
     # Run Flask app in a separate thread
@@ -153,4 +153,5 @@ def run_flask_app():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.run(start())
+

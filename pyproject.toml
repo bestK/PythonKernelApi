@@ -1,11 +1,11 @@
 [tool.poetry]
-name = "kernel-program"
+name = "kernel-program-api"
 version = "0.1.0"
 description = "kernel_program"
 authors = ["Your Name <you@example.com>"]
 license = "MIT"
 readme = "README.md"
-packages = [{ include = "kernel_program" }]
+packages = [ { include = "kernel_program", from = "." },]
 
 [tool.poetry.dependencies]
 python = "^3.10"
@@ -15,6 +15,8 @@ flask-cors = "^4.0.0"
 jupyter-client = "^8.3.0"
 snakemq = "^1.6"
 ipykernel = "^6.24.0"
+
+[tool.poetry.scripts]
 
 
 [build-system]

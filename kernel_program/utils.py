@@ -6,7 +6,9 @@ import snakemq.message
 import snakemq.messaging
 import snakemq.packeter
 
-import config
+
+import kernel_program.config as config
+ 
 
 
 def escape_ansi(line):
