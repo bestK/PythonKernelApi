@@ -200,25 +200,21 @@ def handle_stop():
 class LimitedLengthString:
     def __init__(self, maxlen=2000):
         self.data = {}
-        self.len = 0
+        slef.len = {}
         self.maxlen = maxlen
 
-    def append(self, string, key=None):
-        if key not in self.data:
-            self.data[key] = deque()
+    def append(self, string, key):
         self.data[key].append(string)
-        self.len += len(string)
-        while self.len > self.maxlen:
+        if self.len[key] is None:
+            self.len[key] = 0
+        self.len[key] += self.len[key] + len(string)
+        while self.len[key] > self.maxlen:
             popped = self.data[key].popleft()
-            self.len -= len(popped)
+            self.len[key] -= len(popped)
 
-    def get_string(self, key=None):
-        if key is not None and key in self.data:
-            result = "".join(self.data[key])
-            return result[-self.maxlen :]
-        else:
-            result = "".join(["".join(strings) for strings in self.data.values()])
-            return result[-self.maxlen :]
+    def get_string(self, key):
+        result = "".join(self.data[key])
+        return result[-self.maxlen :]
 
 
 message_buffer = LimitedLengthString()
