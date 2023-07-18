@@ -115,9 +115,12 @@ async def start_snakemq():
     # Wrap the snakemq_link.Link loop in an asyncio task
     await asyncio.gather(async_send_queued_messages(), async_link_loop())
 
+@app.route("/", methods=["POST", "GET"])
+def handle_index():
+    return jsonify({"result": "success"})
 
 @app.route("/python", methods=["POST", "GET"])
-def handle_request():
+def handle_python():
     if request.method == "GET":
         # Handle GET requests by sending everything that's in the receive_queue
         results = [result_queue.get() for _ in range(result_queue.qsize())]
@@ -145,7 +148,7 @@ def generate_code():
     loop.close()
 
     # Append all messages to the message buffer for later use
-    message_buffer.append(user_prompt + "\n\n")
+    message_buffer.append(user_prompt + "\n\n", user_openai_key)
 
     return jsonify({"code": code}), status
 
@@ -196,20 +199,26 @@ def handle_stop():
 
 class LimitedLengthString:
     def __init__(self, maxlen=2000):
-        self.data = deque()
+        self.data = {}
         self.len = 0
         self.maxlen = maxlen
 
-    def append(self, string):
-        self.data.append(string)
+    def append(self, string, key=None):
+        if key not in self.data:
+            self.data[key] = deque()
+        self.data[key].append(string)
         self.len += len(string)
         while self.len > self.maxlen:
-            popped = self.data.popleft()
+            popped = self.data[key].popleft()
             self.len -= len(popped)
 
-    def get_string(self):
-        result = "".join(self.data)
-        return result[-self.maxlen :]
+    def get_string(self, key=None):
+        if key is not None and key in self.data:
+            result = "".join(self.data[key])
+            return result[-self.maxlen :]
+        else:
+            result = "".join(["".join(strings) for strings in self.data.values()])
+            return result[-self.maxlen :]
 
 
 message_buffer = LimitedLengthString()
@@ -219,7 +228,7 @@ async def get_code(user_prompt, user_openai_key=None, model="gpt-3.5-turbo"):
     prompt = f"""First, here is a history of what I asked you to do earlier. 
     The actual prompt follows after ENDOFHISTORY. 
     History:
-    {message_buffer.get_string()}
+    {message_buffer.get_string(user_openai_key)}
     ENDOFHISTORY.
     Write Python code, in a triple backtick Markdown code block, that does the following:
     {user_prompt}
