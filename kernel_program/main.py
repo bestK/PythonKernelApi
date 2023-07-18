@@ -200,7 +200,7 @@ def handle_stop():
 class LimitedLengthString:
     def __init__(self, maxlen=2000):
         self.data = {}
-        slef.len = {}
+        self.len = {}
         self.maxlen = maxlen
 
     def append(self, string, key):
