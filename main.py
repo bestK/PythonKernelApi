@@ -111,7 +111,7 @@ async def start_snakemq():
     await asyncio.gather(async_send_queued_messages(), async_link_loop())
 
 
-@app.route("/api", methods=["POST", "GET"])
+@app.route("/python", methods=["POST", "GET"])
 def handle_request():
     if request.method == "GET":
         # Handle GET requests by sending everything that's in the receive_queue
@@ -132,10 +132,12 @@ def handle_restart():
 
     return jsonify({"result": "success"})
 
+
 @app.route("/shutdown", methods=["POST"])
 def handle_stop():
     cleanup_kernel_program()
     return jsonify({"result": "bye~"})
+
 
 async def main():
     start_kernel_manager()
