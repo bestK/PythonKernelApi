@@ -162,3 +162,5 @@ cython_debug/
 
 kernel_connection_file.json
 process_pids/
+
+workspace/

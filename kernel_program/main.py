@@ -1,18 +1,21 @@
-import utils
-import kernel_manager
-import config
 import asyncio
 import json
 import logging
 import os
 import pathlib
+import re
 import subprocess
 import sys
 import threading
 import time
-from queue import Queue
-
 from collections import deque
+from queue import Queue
+from typing import Dict
+
+import config
+import kernel_manager
+import requests
+import utils
 from dotenv import load_dotenv
 from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS  # Import the CORS library
@@ -26,6 +29,9 @@ OPENAI_API_VERSION = os.environ.get("OPENAI_API_VERSION", "2023-03-15-preview")
 AZURE_OPENAI_DEPLOYMENT = os.environ.get("AZURE_OPENAI_DEPLOYMENT", "")
 APP_PORT = int(os.environ.get("API_PORT", 443))
 
+UPLOAD_FOLDER = "workspace/"
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
 # Get global logger
 logger = config.get_logger()
 
@@ -33,8 +39,8 @@ logger = config.get_logger()
 kernel_manager_process = None
 
 # Use efficient Python queues to store messages
-result_queue = Queue()
-send_queue = Queue()
+result_queue: Dict[str, Queue] = {}
+send_queue: Dict[str, Queue] = {}
 
 messaging = None
 
@@ -46,6 +52,7 @@ cli = sys.modules["flask.cli"]
 cli.show_server_banner = lambda *x: None
 
 app = Flask(__name__)
+app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 CORS(app)
 
 
@@ -95,13 +102,19 @@ async def start_snakemq():
 
     def send_queued_messages():
         while True:
-            if send_queue.qsize() > 0:
-                message = send_queue.get()
-                utils.send_json(
-                    messaging,
-                    {"type": "execute", "value": message["command"]},
-                    config.IDENT_KERNEL_MANAGER,
-                )
+            for queue in send_queue.values():
+                if not queue.empty():
+                    message = queue.get()
+                    logger.debug(f'send message to km:{message}')
+                    utils.send_json(
+                        messaging,
+                        {
+                            "type": "execute",
+                            "value": message["command"],
+                            "uid": message["uid"],
+                        },
+                        config.IDENT_KERNEL_MANAGER,
+                    )
             time.sleep(0.1)
 
     async def async_send_queued_messages():
@@ -115,20 +128,33 @@ async def start_snakemq():
     # Wrap the snakemq_link.Link loop in an asyncio task
     await asyncio.gather(async_send_queued_messages(), async_link_loop())
 
+
 @app.route("/", methods=["POST", "GET"])
 def handle_index():
     return jsonify({"result": "success"})
 
+
 @app.route("/python", methods=["POST", "GET"])
 def handle_python():
     if request.method == "GET":
+        uid = request.args.get("uid")
+        if uid is None:
+            return jsonify({"error": "uid must not be null"}), 400
         # Handle GET requests by sending everything that's in the receive_queue
-        results = [result_queue.get() for _ in range(result_queue.qsize())]
+        if len(result_queue) == 0:
+            return jsonify({"results": []})
+
+        results = [result_queue[uid].get() for _ in range(result_queue[uid].qsize())]
         return jsonify({"results": results})
     elif request.method == "POST":
         data = request.json
+        uid = data["uid"]
+        if uid is None:
+            return jsonify({"error": "uid must not be null"}), 400
+        if uid not in send_queue:
+            send_queue[uid] = Queue()
 
-        send_queue.put(data)
+        send_queue[uid].put(data)
 
         return jsonify({"result": "success"})
 
@@ -137,7 +163,7 @@ def handle_python():
 def generate_code():
     user_prompt = request.json.get("prompt", "")
     user_openai_key = request.json.get("openAIKey", None)
-    model = request.json.get("model", None)
+    model = request.json.get("model", "gpt-3.5-turbo")
 
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
@@ -199,20 +225,25 @@ def handle_stop():
 
 class LimitedLengthString:
     def __init__(self, maxlen=2000):
-        self.data = {}
-        self.len = {}
+        self.data: Dict[str, deque] = {}
+        self.len: Dict[str, int] = {}
         self.maxlen = maxlen
 
     def append(self, string, key):
-        self.data[key].append(string)
-        if self.len[key] is None:
+        if key not in self.data:
+            self.data[key] = deque("")
             self.len[key] = 0
+
+        self.data[key].append(string)
+
         self.len[key] += self.len[key] + len(string)
         while self.len[key] > self.maxlen:
             popped = self.data[key].popleft()
             self.len[key] -= len(popped)
 
     def get_string(self, key):
+        if key not in self.data:
+            return ""
         result = "".join(self.data[key])
         return result[-self.maxlen :]
 

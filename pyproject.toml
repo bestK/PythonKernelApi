@@ -15,8 +15,16 @@ flask-cors = "^4.0.0"
 jupyter-client = "^8.3.0"
 snakemq = "^1.6"
 ipykernel = "^6.24.0"
+requests = "^2.31.0"
 
 [tool.poetry.scripts]
+
+[tool.isort]
+multi_line_output = 3
+include_trailing_comma = true
+force_grid_wrap = 0
+line_length = 88
+profile = "black"
 
 
 [build-system]

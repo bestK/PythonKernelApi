@@ -1,13 +1,11 @@
 import json
 import re
 
+import config
 import snakemq.link
 import snakemq.message
 import snakemq.messaging
 import snakemq.packeter
-
-
-import config
 
 
 def escape_ansi(line):

@@ -1,5 +1,3 @@
-import utils
-import config
 import atexit
 import json
 import os
@@ -13,10 +11,12 @@ import time
 import traceback
 from time import sleep
 
+import config
+import utils
 from dotenv import load_dotenv
 from jupyter_client import BlockingKernelClient
 
-load_dotenv('.env')
+load_dotenv(".env")
 
 
 # Set up globals
@@ -37,7 +37,7 @@ class FlushingThread(threading.Thread):
                 logger.info("Sema was released to kill thread")
                 sys.exit()
 
-            flush_kernel_msgs(self.kc)
+            flush_kernel_msgs(self.kc, None)
             time.sleep(1)
 
 
@@ -63,16 +63,16 @@ def cleanup_spawned_processes():
                     # Windows process killing is flaky
                     pass
             except Exception as e:
-                logger.debug(e)
+                logger.debug(f'cleanup_spawned_processes error:{e}')
 
 
 def start_snakemq(kc):
     global messaging
 
-    messaging, link = utils.init_snakemq(
-        config.IDENT_KERNEL_MANAGER, "connect")
+    messaging, link = utils.init_snakemq(config.IDENT_KERNEL_MANAGER, "connect")
 
     def on_recv(conn, ident, message):
+        logger.debug(f"km.on_recv:{message}")
         if ident == config.IDENT_MAIN:
             message = json.loads(message.data.decode("utf-8"))
 
@@ -80,15 +80,14 @@ def start_snakemq(kc):
                 logger.debug("Executing command: %s" % message["value"])
                 kc.execute(message["value"])
                 # Try direct flush with default wait (0.2)
-                flush_kernel_msgs(kc)
+                flush_kernel_msgs(kc, message["uid"])
 
     messaging.on_message_recv.add(on_recv)
 
     start_flusher(kc)
 
     # Send alive
-    utils.send_json(messaging, {"type": "status",
-                    "value": "ready"}, config.IDENT_MAIN)
+    utils.send_json(messaging, {"type": "status", "value": "ready"}, config.IDENT_MAIN)
     logger.info("Python kernel ready to receive messages!")
 
     logger.info("Starting snakemq loop")
@@ -116,13 +115,16 @@ def start_flusher(kc):
     atexit.register(end_thread)
 
 
-def send_message(message, message_type="message"):
+def send_message(uid, message, message_type="message"):
     utils.send_json(
-        messaging, {"type": message_type, "value": message}, config.IDENT_MAIN
+        messaging,
+        {"uid": uid, "type": message_type, "value": message},
+        config.IDENT_MAIN,
     )
 
 
-def flush_kernel_msgs(kc, tries=1, timeout=0.2):
+def flush_kernel_msgs(kc, uid="1", tries=1, timeout=0.2):
+    logger.debug(f"flush_kernel_msgs {uid}")
     try:
         hit_empty = 0
 
@@ -132,26 +134,26 @@ def flush_kernel_msgs(kc, tries=1, timeout=0.2):
                 if msg["msg_type"] == "execute_result":
                     if "text/plain" in msg["content"]["data"]:
                         send_message(
-                            msg["content"]["data"]["text/plain"], "message_raw"
+                            uid, msg["content"]["data"]["text/plain"], "message_raw"
                         )
                 if msg["msg_type"] == "display_data":
                     if "image/png" in msg["content"]["data"]:
                         # Convert to Slack upload
                         send_message(
+                            uid,
                             msg["content"]["data"]["image/png"],
                             message_type="image/png",
                         )
                     elif "text/plain" in msg["content"]["data"]:
-                        send_message(msg["content"]["data"]["text/plain"])
+                        send_message(uid, msg["content"]["data"]["text/plain"])
 
                 elif msg["msg_type"] == "stream":
-                    logger.debug("Received stream output %s" %
-                                 msg["content"]["text"])
-                    send_message(msg["content"]["text"])
+                    logger.debug("Received stream output %s" % msg["content"]["text"])
+                    send_message(uid, msg["content"]["text"])
                 elif msg["msg_type"] == "error":
                     send_message(
-                        utils.escape_ansi(
-                            "\n".join(msg["content"]["traceback"])),
+                        uid,
+                        utils.escape_ansi("\n".join(msg["content"]["traceback"])),
                         "message_raw",
                     )
             except queue.Empty:
@@ -163,16 +165,15 @@ def flush_kernel_msgs(kc, tries=1, timeout=0.2):
                 # get_iopub_msg suffers from message fetch errors
                 break
             except Exception as e:
-                logger.debug(f"{e} [{type(e)}")
+                logger.debug(f"flush_kernel_msgs error:{e} [{type(e)}")
                 logger.debug(traceback.format_exc())
                 break
     except Exception as e:
-        logger.debug(f"{e} [{type(e)}")
+        logger.debug(f"flush_kernel_msgs error!:{e} [{type(e)}")
 
 
 def start_kernel():
-    kernel_connection_file = os.path.join(
-        os.getcwd(), "kernel_connection_file.json")
+    kernel_connection_file = os.path.join(os.getcwd(), "kernel_connection_file.json")
 
     if os.path.isfile(kernel_connection_file):
         os.remove(kernel_connection_file)
@@ -183,7 +184,7 @@ def start_kernel():
         pathlib.Path(__file__).parent.resolve(), "launch_kernel.py"
     )
 
-    os.makedirs('workspace/', exist_ok=True)
+    os.makedirs("workspace/", exist_ok=True)
 
     kernel_process = subprocess.Popen(
         [
@@ -194,7 +195,7 @@ def start_kernel():
             "--matplotlib=inline",
             "--quiet",
         ],
-        cwd='workspace/',
+        cwd="workspace/",
     )
     # Write PID for caller to kill
     str_kernel_pid = str(kernel_process.pid)
@@ -209,7 +210,7 @@ def start_kernel():
         else:
             # Keep looping if JSON parsing fails, file may be partially written
             try:
-                with open(kernel_connection_file, 'r') as fp:
+                with open(kernel_connection_file, "r") as fp:
                     json.load(fp)
                 break
             except json.JSONDecodeError:
