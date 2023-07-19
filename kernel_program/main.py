@@ -1,21 +1,25 @@
-import utils
-import kernel_manager
-import config
 import asyncio
 import json
 import logging
 import os
 import pathlib
+import re
 import subprocess
 import sys
 import threading
 import time
-from queue import Queue
-
 from collections import deque
+from queue import Queue
+from typing import Dict
+
+import config
+import kernel_manager
+import requests
+import utils
 from dotenv import load_dotenv
 from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS  # Import the CORS library
+from snakemq.message import Message
 
 load_dotenv(".env")
 
@@ -25,6 +29,9 @@ OPENAI_BASE_URL = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com")
 OPENAI_API_VERSION = os.environ.get("OPENAI_API_VERSION", "2023-03-15-preview")
 AZURE_OPENAI_DEPLOYMENT = os.environ.get("AZURE_OPENAI_DEPLOYMENT", "")
 APP_PORT = int(os.environ.get("API_PORT", 443))
+
+UPLOAD_FOLDER = "workspace/"
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 # Get global logger
 logger = config.get_logger()
@@ -46,6 +53,7 @@ cli = sys.modules["flask.cli"]
 cli.show_server_banner = lambda *x: None
 
 app = Flask(__name__)
+app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 CORS(app)
 
 
@@ -76,12 +84,13 @@ async def start_snakemq():
 
     messaging, link = utils.init_snakemq(config.IDENT_MAIN)
 
-    def on_recv(conn, ident, message):
+    def on_recv(conn, ident, message: Message):
         message = json.loads(message.data.decode("utf-8"))
 
         if message["type"] == "status":
             if message["value"] == "ready":
                 logger.debug("Kernel is ready.")
+
                 result_queue.put({"value": "Kernel is ready.", "type": "message"})
 
         elif message["type"] in ["message", "message_raw", "image/png", "image/jpeg"]:
@@ -115,9 +124,11 @@ async def start_snakemq():
     # Wrap the snakemq_link.Link loop in an asyncio task
     await asyncio.gather(async_send_queued_messages(), async_link_loop())
 
+
 @app.route("/", methods=["POST", "GET"])
 def handle_index():
     return jsonify({"result": "success"})
+
 
 @app.route("/python", methods=["POST", "GET"])
 def handle_python():
@@ -127,7 +138,6 @@ def handle_python():
         return jsonify({"results": results})
     elif request.method == "POST":
         data = request.json
-
         send_queue.put(data)
 
         return jsonify({"result": "success"})
@@ -137,7 +147,7 @@ def handle_python():
 def generate_code():
     user_prompt = request.json.get("prompt", "")
     user_openai_key = request.json.get("openAIKey", None)
-    model = request.json.get("model", None)
+    model = request.json.get("model", "gpt-3.5-turbo")
 
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
@@ -199,20 +209,25 @@ def handle_stop():
 
 class LimitedLengthString:
     def __init__(self, maxlen=2000):
-        self.data = {}
-        self.len = {}
+        self.data: Dict[str, deque] = {}
+        self.len: Dict[str, int] = {}
         self.maxlen = maxlen
 
     def append(self, string, key):
-        self.data[key].append(string)
-        if self.len[key] is None:
+        if key not in self.data:
+            self.data[key] = deque("")
             self.len[key] = 0
+
+        self.data[key].append(string)
+
         self.len[key] += self.len[key] + len(string)
         while self.len[key] > self.maxlen:
             popped = self.data[key].popleft()
             self.len[key] -= len(popped)
 
     def get_string(self, key):
+        if key not in self.data:
+            return ""
         result = "".join(self.data[key])
         return result[-self.maxlen :]
 
